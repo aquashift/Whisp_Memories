@@ -13,7 +13,7 @@
 - Important context for collaboration
 
 ## 3. Project Coding Preferences
-- Language: C#
+- Language: C#+
 - Style: use expression-bodied members where concise
 - Naming: private fields prefixed with `_`
 - Tests: prefer xUnit with FluentAssertions

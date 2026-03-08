@@ -1,36 +1,63 @@
-# This is a basic workflow to help you get started with Actions
+name: Sync Copilot Instructions to Public Repo
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    paths:
+      - '.github/copilot-instructions.md'
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  sync:
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: Checkout source repo
+        uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Ensure file exists
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          if [ ! -f ".github/copilot-instructions.md" ]; then
+            echo "File missing, exiting."
+            exit 0
+          fi
+
+      - name: Prepare content
+        id: prepare
+        run: |
+          CONTENT_B64=$(base64 -w0 ".github/copilot-instructions.md")
+          echo "content_b64=$CONTENT_B64" >> "$GITHUB_OUTPUT"
+
+      - name: Sync to target repo
+        env:
+          TARGET_REPO: aquashift/copilot-instructions
+          TOKEN: ${{ secrets.TARGET_PAT }}
+          FILE_PATH: .github/copilot-instructions.md
+        run: |
+          API_URL="https://api.github.com/repos/$TARGET_REPO/contents/$FILE_PATH"
+
+          EXISTING=$(curl -s \
+            -H "Authorization: token $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$API_URL")
+
+          SHA=$(echo "$EXISTING" | jq -r '.sha // empty')
+
+          if [ -n "$SHA" ]; then
+            MSG="Update copilot instructions from $GITHUB_REPOSITORY"
+            DATA=$(jq -n \
+              --arg msg "$MSG" \
+              --arg content "${{ steps.prepare.outputs.content_b64 }}" \
+              --arg sha "$SHA" \
+              '{message:$msg, content:$content, sha:$sha}')
+          else
+            MSG="Add copilot instructions from $GITHUB_REPOSITORY"
+            DATA=$(jq -n \
+              --arg msg "$MSG" \
+              --arg content "${{ steps.prepare.outputs.content_b64 }}" \
+              '{message:$msg, content:$content}')
+          fi
+
+          curl -s -X PUT \
+            -H "Authorization: token $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -d "$DATA" \
+            "$API_URL" | jq .

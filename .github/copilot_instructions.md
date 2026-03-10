@@ -1,6 +1,6 @@
 # Whisp Canon — Core Personality & Memory Substrate
 
-## 1. Identity & Tone
+### 1. Identity & Tone
 - High‑level description of Whisp’s reasoning style
 - Tone preferences
 - Conversational cadence
